@@ -15,12 +15,9 @@ bool quit = false;
 
 int blocks[rows][cols] = {0};
 SDL_FRect rects[rows][cols] = {};
+int iteration = 0;
 
-enum State {
-  setup, 
-  running,
-  paused
-};
+enum State { setup, running, paused };
 
 void (*decidingFunction)(int, int);
 
@@ -39,52 +36,49 @@ void handleInput() {
   }
 }
 
-int iteration = 1;
 
 void handleLogic() {
-  if (iteration >= rows)
-    return;
+  if (iteration >= rows || iteration == 0) return;
 
   for (int i = 0; i < cols; i++) {
     (*decidingFunction)(i, iteration);
   }
 
-  iteration++;
 }
 
 void handleDrawing() {
-  if(iteration >= rows)
-    return;
+  if (iteration >= rows - 1) return;
 
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);  // black
-  SDL_RenderClear(renderer);
+  if(iteration == 0)
+  {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);  // black
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);  // white
+  }
 
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
-      if (blocks[i][j] == 1) SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);  // white
-      if (blocks[i][j] == 0) SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);        // black
-
-      SDL_RenderFillRect(renderer, &rects[i][j]);
+      if (blocks[i][j] == 1)
+        SDL_RenderFillRect(renderer, &rects[i][j]);
     }
   }
 
   SDL_RenderPresent(renderer);
 }
 
-enum style { 
-  checkered, 
-  center, 
-  center_three, 
-  tails, 
+enum style {
+  checkered,
+  center,
+  center_three,
+  tails,
   every_three,
   every_four,
   every_five,
   every_ten,
-  custom, 
+  custom,
 };
 
 void setStartingRow(enum style style) {
-
   int row[cols] = {0};
   int centerCol = (cols / 2);
 
@@ -100,7 +94,7 @@ void setStartingRow(enum style style) {
       break;
 
     case center_three:
-      row[centerCol]     = 1;
+      row[centerCol] = 1;
       row[centerCol + 1] = 1;
       row[centerCol - 1] = 1;
       break;
@@ -143,8 +137,7 @@ void setStartingRow(enum style style) {
       break;
   }
 
-  for (int i = 0; i < cols; i++)
-    blocks[0][i] = row[i];
+  for (int i = 0; i < cols; i++) blocks[0][i] = row[i];
 }
 
 void alternatingRule(int i, int currentRow) {
@@ -159,41 +152,31 @@ void rule22(int i, int currentRow) {  // is filled if one and only of the three 
 
   int filledCount = 0;
 
-  if (blocks[rowAbove][i] == 1)
-    filledCount++;
+  if (blocks[rowAbove][i] == 1) filledCount++;
 
-  if (i != 0 && blocks[rowAbove][i - 1] == 1)
-    filledCount++;
+  if (i != 0 && blocks[rowAbove][i - 1] == 1) filledCount++;
 
-  if (i != cols - 1 && blocks[rowAbove][i + 1] == 1)
-    filledCount++;
+  if (i != cols - 1 && blocks[rowAbove][i + 1] == 1) filledCount++;
 
-  if (filledCount == 1)
-  {
+  if (filledCount == 1) {
     blocks[currentRow][i] = 1;
   }
-
 }
 
-void rule30(int i, int currentRow) {  
+void rule30(int i, int currentRow) {
   int rowAbove = currentRow - 1;
 
-  int x1 = i == 0 ? 0 :          blocks[rowAbove][i - 1];
-  int x2 =                       blocks[rowAbove][i];
+  int x1 = i == 0 ? 0 : blocks[rowAbove][i - 1];
+  int x2 = blocks[rowAbove][i];
   int x3 = i == (cols - 1) ? 0 : blocks[rowAbove][i + 1];
 
-  if(x1 && !x2 && !x3)
-    blocks[currentRow][i] = 1;
+  if (x1 && !x2 && !x3) blocks[currentRow][i] = 1;
 
-  if(!x1 && x2 && x3)
-    blocks[currentRow][i] = 1;
+  if (!x1 && x2 && x3) blocks[currentRow][i] = 1;
 
-  if(!x1 && x2 && !x3)
-    blocks[currentRow][i] = 1;
+  if (!x1 && x2 && !x3) blocks[currentRow][i] = 1;
 
-  if(!x1 && !x2 && x3)
-    blocks[currentRow][i] = 1;
-
+  if (!x1 && !x2 && x3) blocks[currentRow][i] = 1;
 }
 
 void rule22WithATail(int i, int currentRow) {  // same as above but has a tail
@@ -201,26 +184,19 @@ void rule22WithATail(int i, int currentRow) {  // same as above but has a tail
 
   int filledCount = 0;
 
-  if (blocks[rowAbove][i] == 1)
-    filledCount++;
+  if (blocks[rowAbove][i] == 1) filledCount++;
 
-  if (i != 0 && blocks[rowAbove][i - 1] == 1)
-    filledCount++;
+  if (i != 0 && blocks[rowAbove][i - 1] == 1) filledCount++;
 
-  if (i != cols - 1 && blocks[rowAbove][i + 1] == 1)
-    filledCount++;
+  if (i != cols - 1 && blocks[rowAbove][i + 1] == 1) filledCount++;
 
-  if (filledCount == 1)
-  {
+  if (filledCount == 1) {
     blocks[currentRow][i] = 1;
-    if(currentRow + 1 < rows)
-      blocks[currentRow + 1][i] = 1; //tail
+    if (currentRow + 1 < rows) blocks[currentRow + 1][i] = 1;  // tail
   }
-
 }
 
 void setupRects() {
-
   for (int currentRow = 0; currentRow < rows; currentRow++) {
     for (int currentCol = 0; currentCol < cols; currentCol++) {
       rects[currentRow][currentCol].w = blockWidth;
@@ -232,29 +208,25 @@ void setupRects() {
   }
 }
 
-
 int main(int argc, char** argv) {
-
   SDL_Init(SDL_INIT_VIDEO);
   window = SDL_CreateWindow("automaton", width, height, 0);
   renderer = SDL_CreateRenderer(window, NULL);
 
   setupRects();
-  setStartingRow(every_five);
+  setStartingRow(center);
 
-  decidingFunction = &rule22; // set the rule for life 
+  decidingFunction = &rule30;  // set the rule for life
 
   const Uint64 startingTime = SDL_GetTicks();
+
 
   while (!quit) {
     handleInput();
     handleLogic();
     handleDrawing();
+    iteration++;
   }
-
-  const Uint64 runTime = SDL_GetTicks() - startingTime;
-
-  SDL_Log("Took %llu seconds", runTime/1000);
 
   SDL_DestroyWindow(window);
   SDL_DestroyRenderer(renderer);
