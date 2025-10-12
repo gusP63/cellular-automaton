@@ -1,9 +1,12 @@
 #include <SDL3/SDL.h>
 
-#define width 400
+#define width 800
 
-#define rows 100
-#define cols 40
+#define rows 250
+#define cols 200
+
+const int blockWidth = width / cols;
+const int height = blockWidth * rows;
 
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -11,8 +14,9 @@ SDL_Renderer* renderer;
 bool quit = false;
 
 int blocks[rows][cols] = {0};
-
 SDL_FRect rects[rows][cols] = {};
+
+void (*decidingFunction)(int, int);
 
 void handleInput() {
   SDL_Event e;
@@ -31,16 +35,16 @@ void handleInput() {
 
 int iteration = 1;
 
-void handleLogic(void (*decidingRule)(int, int)) {
+void handleLogic() {
   if (iteration >= rows)
     return;
 
   for (int i = 0; i < cols; i++) {
-    (*decidingRule)(i, iteration);
+    (*decidingFunction)(i, iteration);
   }
 
   iteration++;
-  SDL_Delay(500);
+  SDL_Delay(10);
 }
 
 void handleDrawing() {
@@ -62,9 +66,13 @@ void handleDrawing() {
   SDL_RenderPresent(renderer);
 }
 
-enum style { checkered, centered, custom };
+enum style { checkered, centered, center_three, custom };
 
-void setStartingRow(int row[cols], enum style style) {
+void setStartingRow(enum style style) {
+  int row[cols] = {0};
+
+  int centerCol = (cols / 2);
+
   switch (style) {
     case checkered:
       for (int i = 0; i < cols; i++) {
@@ -73,13 +81,28 @@ void setStartingRow(int row[cols], enum style style) {
       break;
 
     case centered:
-      row[(int)cols / 2] = 1;
+      row[centerCol] = 1;
+      break;
+
+    case center_three:
+      row[centerCol]     = 1;
+      row[centerCol + 1] = 1;
+      row[centerCol - 1] = 1;
       break;
 
     case custom:
-      //
+      row[centerCol]     = 1;
+      row[centerCol + 1] = 1;
+      row[centerCol - 1] = 1;
+
+      row[0] = 1;
+      row[cols - 1] = 1;
+
       break;
   }
+
+  for (int i = 0; i < cols; i++)
+    blocks[0][i] = row[i];
 }
 
 void alternatingRule(int i, int currentRow) {
@@ -108,25 +131,7 @@ void oneAndOnlyOneOfThreeRule(int i, int currentRow) {  // is filled if one and 
 
 }
 
-int main(int argc, char** argv) {
-  SDL_Init(SDL_INIT_VIDEO);
-
-  const int blockWidth = width / cols;
-  const int height = blockWidth * rows;
-
-  window = SDL_CreateWindow("automaton", width, height, 0);
-  renderer = SDL_CreateRenderer(window, NULL);
-
-  int startingRow[cols] = {0};
-
-  setStartingRow(startingRow, checkered);
-
-  /* for(int i = 0; i < cols; i++) */
-  /* { */
-
-  /* } */
-
-  for (int i = 0; i < cols; i++) blocks[0][i] = startingRow[i];
+void setupRects() {
 
   for (int currentRow = 0; currentRow < rows; currentRow++) {
     for (int currentCol = 0; currentCol < cols; currentCol++) {
@@ -137,14 +142,23 @@ int main(int argc, char** argv) {
       rects[currentRow][currentCol].y = blockWidth * currentRow;
     }
   }
+}
 
-  void (*decidingFunction)(int, int);
 
-  decidingFunction = &oneAndOnlyOneOfThreeRule;
+int main(int argc, char** argv) {
+
+  SDL_Init(SDL_INIT_VIDEO);
+  window = SDL_CreateWindow("automaton", width, height, 0);
+  renderer = SDL_CreateRenderer(window, NULL);
+
+  setupRects();
+  setStartingRow(custom);
+
+  decidingFunction = &oneAndOnlyOneOfThreeRule; // set the rule for reproduction
 
   while (!quit) {
     handleInput();
-    handleLogic(decidingFunction);
+    handleLogic();
     handleDrawing();
   }
 
