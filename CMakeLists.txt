@@ -7,6 +7,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 find_package(SDL3 REQUIRED)
 
-add_executable(${PROJECT_NAME} src/main.c)
+add_executable(${PROJECT_NAME}
+  src/main.c
+  src/rules.c
+  src/setup.c
+  src/constants.h
+)
 
 target_link_libraries(${PROJECT_NAME} SDL3::SDL3 m)
