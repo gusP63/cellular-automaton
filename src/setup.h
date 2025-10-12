@@ -16,7 +16,8 @@ enum style {
   custom,
 };
 
-void setStartingRow(enum style style, int blocks[rows][cols]); 
+void clearBoard(int blocks[rows][cols]);
+// void setStartingRow(enum style style, int blocks[rows][cols]); 
 void setupRects(SDL_FRect  rects[rows][cols]); 
 
 #endif
