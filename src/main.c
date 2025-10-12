@@ -1,9 +1,9 @@
 #include <SDL3/SDL.h>
 
-#define width 800
+#define width 1500
 
-#define rows 250
-#define cols 200
+#define rows 300
+#define cols 500
 
 const int blockWidth = width / cols;
 const int height = blockWidth * rows;
@@ -15,6 +15,12 @@ bool quit = false;
 
 int blocks[rows][cols] = {0};
 SDL_FRect rects[rows][cols] = {};
+
+enum State {
+  setup, 
+  running,
+  paused
+};
 
 void (*decidingFunction)(int, int);
 
@@ -44,7 +50,6 @@ void handleLogic() {
   }
 
   iteration++;
-  SDL_Delay(10);
 }
 
 void handleDrawing() {
@@ -66,11 +71,21 @@ void handleDrawing() {
   SDL_RenderPresent(renderer);
 }
 
-enum style { checkered, centered, center_three, custom };
+enum style { 
+  checkered, 
+  center, 
+  center_three, 
+  tails, 
+  every_three,
+  every_four,
+  every_five,
+  every_ten,
+  custom, 
+};
 
 void setStartingRow(enum style style) {
-  int row[cols] = {0};
 
+  int row[cols] = {0};
   int centerCol = (cols / 2);
 
   switch (style) {
@@ -80,7 +95,7 @@ void setStartingRow(enum style style) {
       }
       break;
 
-    case centered:
+    case center:
       row[centerCol] = 1;
       break;
 
@@ -90,13 +105,40 @@ void setStartingRow(enum style style) {
       row[centerCol - 1] = 1;
       break;
 
-    case custom:
-      row[centerCol]     = 1;
-      row[centerCol + 1] = 1;
-      row[centerCol - 1] = 1;
-
+    case tails:
       row[0] = 1;
       row[cols - 1] = 1;
+      break;
+
+    case every_three:
+      for (int i = 0; i < cols; i++) {
+        row[i] = i % 3 == 0 ? 1 : 0;
+      }
+      break;
+    case every_four:
+      for (int i = 0; i < cols; i++) {
+        row[i] = i % 4 == 0 ? 1 : 0;
+      }
+      break;
+    case every_five:
+      for (int i = 0; i < cols; i++) {
+        row[i] = i % 5 == 0 ? 1 : 0;
+      }
+
+    case every_ten:
+      for (int i = 0; i < cols; i++) {
+        row[i] = i % 10 == 0 ? 1 : 0;
+      }
+      break;
+
+    case custom:
+      /* row[centerCol]     = 1; */
+      row[centerCol + 2] = 1;
+      row[centerCol - 1] = 1;
+
+      /* row[1] = 1; */
+
+      /* row[10] = 1; */
 
       break;
   }
@@ -112,7 +154,7 @@ void alternatingRule(int i, int currentRow) {
   if (blocks[rowAbove][i] == 1) blocks[currentRow][i] = 0;
 }
 
-void oneAndOnlyOneOfThreeRule(int i, int currentRow) {  // is filled if one and only of the three cells above is filled
+void rule22(int i, int currentRow) {  // is filled if one and only of the three cells above is filled
   int rowAbove = currentRow - 1;
 
   int filledCount = 0;
@@ -127,7 +169,53 @@ void oneAndOnlyOneOfThreeRule(int i, int currentRow) {  // is filled if one and 
     filledCount++;
 
   if (filledCount == 1)
+  {
     blocks[currentRow][i] = 1;
+  }
+
+}
+
+void rule30(int i, int currentRow) {  
+  int rowAbove = currentRow - 1;
+
+  int x1 = i == 0 ? 0 :          blocks[rowAbove][i - 1];
+  int x2 =                       blocks[rowAbove][i];
+  int x3 = i == (cols - 1) ? 0 : blocks[rowAbove][i + 1];
+
+  if(x1 && !x2 && !x3)
+    blocks[currentRow][i] = 1;
+
+  if(!x1 && x2 && x3)
+    blocks[currentRow][i] = 1;
+
+  if(!x1 && x2 && !x3)
+    blocks[currentRow][i] = 1;
+
+  if(!x1 && !x2 && x3)
+    blocks[currentRow][i] = 1;
+
+}
+
+void rule22WithATail(int i, int currentRow) {  // same as above but has a tail
+  int rowAbove = currentRow - 1;
+
+  int filledCount = 0;
+
+  if (blocks[rowAbove][i] == 1)
+    filledCount++;
+
+  if (i != 0 && blocks[rowAbove][i - 1] == 1)
+    filledCount++;
+
+  if (i != cols - 1 && blocks[rowAbove][i + 1] == 1)
+    filledCount++;
+
+  if (filledCount == 1)
+  {
+    blocks[currentRow][i] = 1;
+    if(currentRow + 1 < rows)
+      blocks[currentRow + 1][i] = 1; //tail
+  }
 
 }
 
@@ -152,15 +240,21 @@ int main(int argc, char** argv) {
   renderer = SDL_CreateRenderer(window, NULL);
 
   setupRects();
-  setStartingRow(custom);
+  setStartingRow(every_five);
 
-  decidingFunction = &oneAndOnlyOneOfThreeRule; // set the rule for reproduction
+  decidingFunction = &rule22; // set the rule for life 
+
+  const Uint64 startingTime = SDL_GetTicks();
 
   while (!quit) {
     handleInput();
     handleLogic();
     handleDrawing();
   }
+
+  const Uint64 runTime = SDL_GetTicks() - startingTime;
+
+  SDL_Log("Took %llu seconds", runTime/1000);
 
   SDL_DestroyWindow(window);
   SDL_DestroyRenderer(renderer);
