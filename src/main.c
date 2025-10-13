@@ -19,6 +19,9 @@ SDL_FRect resetTextBounds;
 bool quit = false;
 
 int blocks[rows][cols] = {0};
+int blocksBuffer[rows][cols] = {0};
+
+
 SDL_FRect rects[rows][cols] = {};
 
 int iteration = 0;
@@ -31,7 +34,7 @@ enum Color { black, white };
 enum State currentState = setup;
 enum Color currentDrawingColor = white;
 
-void (*decidingFunction)(int, int, int[rows][cols]);
+void (*decidingFunction)(int, int, int[rows][cols], int[rows][cols]);
 
 SDL_FPoint mousePosition = {0, 0};
 
@@ -43,7 +46,6 @@ typedef struct GridCell {
 GridCell cellToPaint = {-1, -1};
 
 int isMouseDown = 0;
-
 
 void handleInput() {
   SDL_Event e;
@@ -67,6 +69,12 @@ void handleInput() {
           }
 
           if (e.key.key == SDLK_SPACE) {
+            for (int i = 0; i < rows; i++) {
+              for (int j = 0; j < cols; j++) {
+                blocksBuffer[i][j] = blocks[i][j];
+              }
+            }
+
             currentState = running;
           }
 
@@ -94,7 +102,7 @@ void handleInput() {
     if (currentState == running) {
       switch (e.type) {
         case SDL_EVENT_KEY_DOWN:
-          if(e.key.key == SDLK_R || e.key.key == SDLK_ESCAPE){
+          if (e.key.key == SDLK_R || e.key.key == SDLK_ESCAPE) {
             clearBoard(blocks);
             iteration = 0;
             currentState = setup;
@@ -109,30 +117,51 @@ void handleInput() {
   }
 }
 
+
 void handleLogic() {
   if (currentState == setup) {
     if (isMouseDown) {
       cellToPaint.row = (int)((int)mousePosition.y / blockWidth);
       cellToPaint.col = (int)((int)mousePosition.x / blockWidth);
 
-      if(cellToPaint.row >= 0 && cellToPaint.row <= rows - 1 && cellToPaint.col >= 0 && cellToPaint.col <= cols - 1)
+      if (cellToPaint.row >= 0 && cellToPaint.row <= rows - 1 && cellToPaint.col >= 0 && cellToPaint.col <= cols - 1)
         blocks[cellToPaint.row][cellToPaint.col] = currentDrawingColor == white ? 1 : 0;
     }
   }
 
+
   if (currentState == running) {
     if (!runsForever && (iteration >= rows || iteration == 0)) return;
 
-    for (int i = 0; i < cols; i++) {
-      (*decidingFunction)(i, iteration, blocks);
+    // top down rules
+    if (!runsForever) {
+      for (int i = 0; i < cols; i++) {
+        (*decidingFunction)(i, iteration, blocks, blocksBuffer);
+      }
     }
+
+    // make a buffer array (apply rules to every cell simultaneously)
+    // whole board rules
+    if (runsForever) {
+      for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+          (*decidingFunction)(j, i, blocks, blocksBuffer);
+        }
+      }
+
+      for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+          blocks[i][j] = blocksBuffer[i][j];
+        }
+      }
+
+    }
+
   }
 }
 
-int didDraw = 0;
-
-void handleDrawing() {
-  if (!runsForever && iteration >= rows - 1) return;  
+void handleDrawing(int delay) { // milliseconds
+  if (!runsForever && iteration >= rows - 1) return;
 
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);  // black
   SDL_RenderClear(renderer);
@@ -149,9 +178,7 @@ void handleDrawing() {
   }
 
   SDL_RenderPresent(renderer);
-
-
-  if(didDraw) didDraw = 0;
+  SDL_Delay(delay);
 }
 
 void getAssetsFolder(char* path) {
@@ -174,14 +201,16 @@ int main(int argc, char** argv) {
 
   setupRects(rects);
 
-  decidingFunction = &rule30;  // set the rule for life
-  runsForever = 0;
+  decidingFunction = &ruleTnt;  // set the rule for life
+  runsForever = 1;               // if == 0, stops when it reaches the last row
+
+  srand(time(0));
 
   // main loop
   while (!quit) {
     handleInput();
     handleLogic();
-    handleDrawing();
+    handleDrawing(100);
 
     if (currentState == running) {
       iteration++;
@@ -228,13 +257,14 @@ void setupUI() {
   SDL_Color white_color = {255, 255, 255, SDL_ALPHA_OPAQUE};
   /* SDL_Color red_color = {255, 25, 25, SDL_ALPHA_OPAQUE}; */
 
-  // tutorial/manual 
+  // tutorial/manual
   char* tutorialString =
-      "Add points with LEFT MOUSE BUTTON --- Press SPACE to start, R to reset, Q to quit --- Change color: 1 - white (life), 2 - black (void)";
+      "Add points with LEFT MOUSE BUTTON --- Press SPACE to start, R to reset, Q to quit --- Change color: 1 - white "
+      "(life), 2 - black (void)";
 
   SDL_Surface* textSurface = TTF_RenderText_Blended(font, tutorialString, strlen(tutorialString), white_color);
 
-  if(!textSurface) {
+  if (!textSurface) {
     SDL_Log("Surface error: %s", SDL_GetError());
     exit(1);
   }
@@ -246,11 +276,11 @@ void setupUI() {
 
   tutorialTextBounds.h = textureH;
   tutorialTextBounds.w = textureW;
-  tutorialTextBounds.x = width/2.0f - textureW/2.0f;
+  tutorialTextBounds.x = width / 2.0f - textureW / 2.0f;
   tutorialTextBounds.y = height - textureH;
 
-  //TODO: refactor this, SDL_Texture* getTextTexture(string, color, bounds (destRect)) 
-  // reset/quit
+  // TODO: refactor this, SDL_Texture* getTextTexture(string, color, bounds (destRect))
+  //  reset/quit
   char* resetString = "Press R to reset, Q to quit";
 
   textSurface = TTF_RenderText_Blended(font, resetString, strlen(resetString), white_color);
@@ -264,8 +294,6 @@ void setupUI() {
   resetTextBounds.x = 16;
   resetTextBounds.y = textureH;
 
-
   SDL_DestroySurface(textSurface);
 }
-
 
