@@ -1,6 +1,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "constants.h"
 #include "rules.h"
@@ -20,19 +22,21 @@ struct LifeRule {
   void (*function)(int, int, int[rows][cols], int[rows][cols]);
   SDL_Texture *texture;
   SDL_FRect bounds;
+  bool runsForever;
 } typedef LifeRule;
 
 const int n_rules = 10;
-LifeRule rules[] = {{"alternatingRule", &alternatingRule, NULL},
-                    {"rule22", &rule22, NULL},
-                    {"rule30", &rule30, NULL},
-                    {"rule22WithATail", &rule22WithATail, NULL},
-                    {"rule90", &rule90, NULL},
-                    {"rule184", &rule184, NULL},
-                    {"ruleTnt", &ruleTnt, NULL},
-                    {"ruleRain", &ruleRain, NULL},
-                    {"ruleSmoke", &ruleSmoke, NULL},
-                    {"conwayGameOfLife", &conwayGameOfLife, NULL}};
+
+LifeRule rules[10] = {{"alternatingRule", &alternatingRule, NULL, {}, false},
+                      {"rule22", &rule22, NULL, {}, false},
+                      {"rule30", &rule30, NULL, {}, false},
+                      {"rule22WithATail", &rule22WithATail, NULL, {}, false},
+                      {"rule90", &rule90, NULL, {}, false},
+                      {"rule184", &rule184, NULL, {}, false},
+                      {"ruleTnt", &ruleTnt, NULL, {}, true},
+                      {"ruleRain", &ruleRain, NULL, {}, true},
+                      {"ruleSmoke", &ruleSmoke, NULL, {}, true},
+                      {"conwayGameOfLife", &conwayGameOfLife, NULL, {}, true}};
 
 int currentRule = 0;
 
@@ -46,9 +50,9 @@ int blocksBuffer[rows][cols] = {0};
 
 SDL_FRect rects[rows][cols] = {};
 
-int iteration = 0;
+int iteration = 1;
 
-int runsForever = 0;
+/* int runsForever = 0; */
 
 enum State { setup, running, paused, chooseRule };
 enum Color { black, white };
@@ -90,7 +94,7 @@ void handleInput() {
           clearBoard(blocks);
         }
 
-        if (e.key.key == SDLK_S) {
+        if (e.key.key == SDLK_S || e.key.key == SDLK_ESCAPE) {
           currentState = chooseRule;
         }
 
@@ -138,14 +142,21 @@ void handleInput() {
       switch (e.type) {
 
       case SDL_EVENT_KEY_DOWN:
-        if (e.key.key == SDLK_ESCAPE) {
+        if (e.key.key == SDLK_ESCAPE || e.key.key == SDLK_RETURN) {
           currentState = setup;
+          break;
         }
-        if (e.key.key == SDLK_UP) {
-          if (currentRule > 0) currentRule--;
+        if (e.key.key == SDLK_UP || e.key.key == SDLK_K) {
+          if (currentRule == 0)
+            currentRule = n_rules - 1;
+          else
+            currentRule--;
         }
-        if (e.key.key == SDLK_DOWN) {
-          if (currentRule < (n_rules - 1)) currentRule++;
+        if (e.key.key == SDLK_DOWN || e.key.key == SDLK_J) {
+          if (currentRule == (n_rules - 1))
+            currentRule = 0;
+          else
+            currentRule++;
         }
         break;
       }
@@ -156,7 +167,7 @@ void handleInput() {
       case SDL_EVENT_KEY_DOWN:
         if (e.key.key == SDLK_R || e.key.key == SDLK_ESCAPE) {
           clearBoard(blocks);
-          iteration = 0;
+          iteration = 1;
           currentState = setup;
         }
 
@@ -181,21 +192,23 @@ void handleLogic() {
   }
 
   if (currentState == running) {
-    if (!runsForever && (iteration >= rows || iteration == 0)) return;
+    if (!rules[currentRule].runsForever && (iteration >= rows || iteration == 0)) return;
 
     // top down rules
-    if (!runsForever) {
+    if (!rules[currentRule].runsForever) {
       for (int i = 0; i < cols; i++) {
-        (*decidingFunction)(i, iteration, blocks, blocksBuffer);
+        (*rules[currentRule].function)(i, iteration, blocks, blocksBuffer);
       }
+      iteration++;
+      return;
     }
 
     // make a buffer array (apply rules to every cell simultaneously)
     // whole board rules
-    if (runsForever) {
+    if (rules[currentRule].runsForever) {
       for (int i = 0; i < rows; i++) {
         for (int j = 0; j < cols; j++) {
-          (*decidingFunction)(j, i, blocks, blocksBuffer);
+          (*rules[currentRule].function)(j, i, blocks, blocksBuffer);
         }
       }
 
@@ -205,14 +218,15 @@ void handleLogic() {
         }
       }
     }
+    iteration++;
   }
 
-  if (currentState == chooseRule) {
-  }
+  /* if (currentState == chooseRule) { */
+  /* } */
 }
 
 void handleDrawing(int delay) { // milliseconds
-  if (!runsForever && iteration >= rows - 1) return;
+  if (!rules[currentRule].runsForever && iteration >= rows - 1) return;
 
   SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE); // black
   SDL_RenderClear(renderer);
@@ -263,9 +277,6 @@ int main(int argc, char **argv) {
 
   setupRects(rects);
 
-  decidingFunction = &rule30; // set the rule for life
-  runsForever = 1;            // if == 0, stops when it reaches the last row
-
   srand(time(0));
 
   // main loop
@@ -273,10 +284,6 @@ int main(int argc, char **argv) {
     handleInput();
     handleLogic();
     handleDrawing(10);
-
-    if (currentState == running) {
-      iteration++;
-    }
   }
 
   SDL_DestroyWindow(window);
@@ -317,7 +324,7 @@ void initSDL() {
 
 void createTexture(SDL_Texture **texture, const char *text, SDL_FRect *bounds, int x, int y, int selected) {
   SDL_Color white_color = {255, 255, 255, SDL_ALPHA_OPAQUE};
-  SDL_Color green_color = {255, 0, 0, SDL_ALPHA_OPAQUE};
+  SDL_Color green_color = {0, 255, 0, SDL_ALPHA_OPAQUE};
 
   SDL_Color color = selected ? green_color : white_color;
 
@@ -349,8 +356,8 @@ void setupUI() {
 
   createTexture(&resetTextTexture, resetString, &resetTextBounds, 16, 0, 0);
 
-  for (int i = 0; i < n_rules; i++) {
-    createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
-  }
+  /* for (int i = 0; i < n_rules; i++) { */
+  /*   createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0); */
+  /* } */
 }
 

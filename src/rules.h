@@ -21,6 +21,6 @@ void ruleRain(int i, int currentRow, int blocks[rows][cols], int blocksNext[rows
 
 void ruleSmoke(int i, int currentRow, int blocks[rows][cols], int blocksNext[rows][cols]);
 
-void conwayGameOfLife(int i, int currentRow, int blocks[rows][cols], int blocksNext[rows][cols]);
+void conwayGameOfLife(int col, int row, int blocks[rows][cols], int blocksNext[rows][cols]);
 
 #endif
