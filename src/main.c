@@ -6,14 +6,37 @@
 #include "rules.h"
 #include "setup.h"
 
-SDL_Window* window;
-SDL_Renderer* renderer;
-TTF_Font* font;
+SDL_Window *window;
+SDL_Renderer *renderer;
+TTF_Font *font;
 
-SDL_Texture* tutorialTextTexture;
+SDL_Texture *tutorialTextTexture;
 SDL_FRect tutorialTextBounds;
 
-SDL_Texture* resetTextTexture;
+void createTexture(SDL_Texture **texture, const char *text, SDL_FRect *bounds, int x, int y, int selected);
+
+struct LifeRule {
+  char *name;
+  void (*function)(int, int, int[rows][cols], int[rows][cols]);
+  SDL_Texture *texture;
+  SDL_FRect bounds;
+} typedef LifeRule;
+
+const int n_rules = 10;
+LifeRule rules[] = {{"alternatingRule", &alternatingRule, NULL},
+                    {"rule22", &rule22, NULL},
+                    {"rule30", &rule30, NULL},
+                    {"rule22WithATail", &rule22WithATail, NULL},
+                    {"rule90", &rule90, NULL},
+                    {"rule184", &rule184, NULL},
+                    {"ruleTnt", &ruleTnt, NULL},
+                    {"ruleRain", &ruleRain, NULL},
+                    {"ruleSmoke", &ruleSmoke, NULL},
+                    {"conwayGameOfLife", &conwayGameOfLife, NULL}};
+
+int currentRule = 0;
+
+SDL_Texture *resetTextTexture;
 SDL_FRect resetTextBounds;
 
 bool quit = false;
@@ -21,14 +44,13 @@ bool quit = false;
 int blocks[rows][cols] = {0};
 int blocksBuffer[rows][cols] = {0};
 
-
 SDL_FRect rects[rows][cols] = {};
 
 int iteration = 0;
 
 int runsForever = 0;
 
-enum State { setup, running, paused };
+enum State { setup, running, paused, chooseRule };
 enum Color { black, white };
 
 enum State currentState = setup;
@@ -55,68 +77,97 @@ void handleInput() {
 
     if (currentState == setup) {
       switch (e.type) {
-        case SDL_EVENT_KEY_DOWN:
-          if (e.key.key == SDLK_1) {
-            currentDrawingColor = white;
-          }
+      case SDL_EVENT_KEY_DOWN:
+        if (e.key.key == SDLK_1) {
+          currentDrawingColor = white;
+        }
 
-          if (e.key.key == SDLK_2) {
-            currentDrawingColor = black;
-          }
+        if (e.key.key == SDLK_2) {
+          currentDrawingColor = black;
+        }
 
-          if (e.key.key == SDLK_R) {
-            clearBoard(blocks);
-          }
+        if (e.key.key == SDLK_R) {
+          clearBoard(blocks);
+        }
 
-          if (e.key.key == SDLK_SPACE) {
-            for (int i = 0; i < rows; i++) {
-              for (int j = 0; j < cols; j++) {
-                blocksBuffer[i][j] = blocks[i][j];
-              }
+        if (e.key.key == SDLK_S) {
+          currentState = chooseRule;
+        }
+
+        if (e.key.key == SDLK_X) {
+          for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+              int chance = 25;
+              if (rand() % 100 <= chance) blocks[i][j] = 1;
             }
+          }
+        }
 
-            currentState = running;
+        if (e.key.key == SDLK_SPACE) {
+          for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+              blocksBuffer[i][j] = blocks[i][j];
+            }
           }
 
-          if (e.key.key == SDLK_Q) {
-            quit = true;
-          }
-          break;
+          currentState = running;
+        }
 
-        case SDL_EVENT_MOUSE_BUTTON_DOWN:
-          isMouseDown = 1;
+        if (e.key.key == SDLK_Q) {
+          quit = true;
+        }
+        break;
+
+      case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        isMouseDown = 1;
+        SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
+        break;
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+        isMouseDown = 0;
+        break;
+
+      case SDL_EVENT_MOUSE_MOTION:
+        if (isMouseDown) {
           SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
-          break;
-        case SDL_EVENT_MOUSE_BUTTON_UP:
-          isMouseDown = 0;
-          break;
+        }
+        break;
+      }
+    }
 
-        case SDL_EVENT_MOUSE_MOTION:
-          if (isMouseDown) {
-            SDL_GetMouseState(&mousePosition.x, &mousePosition.y);
-          }
-          break;
+    if (currentState == chooseRule) {
+      switch (e.type) {
+
+      case SDL_EVENT_KEY_DOWN:
+        if (e.key.key == SDLK_ESCAPE) {
+          currentState = setup;
+        }
+        if (e.key.key == SDLK_UP) {
+          if (currentRule > 0) currentRule--;
+        }
+        if (e.key.key == SDLK_DOWN) {
+          if (currentRule < (n_rules - 1)) currentRule++;
+        }
+        break;
       }
     }
 
     if (currentState == running) {
       switch (e.type) {
-        case SDL_EVENT_KEY_DOWN:
-          if (e.key.key == SDLK_R || e.key.key == SDLK_ESCAPE) {
-            clearBoard(blocks);
-            iteration = 0;
-            currentState = setup;
-          }
+      case SDL_EVENT_KEY_DOWN:
+        if (e.key.key == SDLK_R || e.key.key == SDLK_ESCAPE) {
+          clearBoard(blocks);
+          iteration = 0;
+          currentState = setup;
+        }
 
-          if (e.key.key == SDLK_Q) {
-            quit = true;
-          }
-          break;
+        if (e.key.key == SDLK_Q) {
+          quit = true;
+        }
+        break;
       }
     }
   }
 }
-
 
 void handleLogic() {
   if (currentState == setup) {
@@ -128,7 +179,6 @@ void handleLogic() {
         blocks[cellToPaint.row][cellToPaint.col] = currentDrawingColor == white ? 1 : 0;
     }
   }
-
 
   if (currentState == running) {
     if (!runsForever && (iteration >= rows || iteration == 0)) return;
@@ -154,18 +204,19 @@ void handleLogic() {
           blocks[i][j] = blocksBuffer[i][j];
         }
       }
-
     }
+  }
 
+  if (currentState == chooseRule) {
   }
 }
 
 void handleDrawing(int delay) { // milliseconds
   if (!runsForever && iteration >= rows - 1) return;
 
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);  // black
+  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE); // black
   SDL_RenderClear(renderer);
-  SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);  // white
+  SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // white
 
   for (int i = 0; i < rows; i++) {
     for (int j = 0; j < cols; j++) {
@@ -177,32 +228,43 @@ void handleDrawing(int delay) { // milliseconds
     SDL_RenderTexture(renderer, tutorialTextTexture, NULL, &tutorialTextBounds);
   }
 
+  if (currentState == chooseRule) {
+    for (int i = 0; i < n_rules; i++) {
+      if (i == currentRule) {
+        createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 1);
+      } else
+        createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
+
+      SDL_RenderTexture(renderer, rules[i].texture, NULL, &rules[i].bounds);
+    }
+  }
+
   SDL_RenderPresent(renderer);
   SDL_Delay(delay);
 }
 
-void getAssetsFolder(char* path) {
-  const char* suffix = "/build/";
+void getAssetsFolder(char *path) {
+  const char *suffix = "/build/";
   size_t len = strlen(path);
   size_t suffix_len = strlen(suffix);
 
   if (len >= suffix_len && strcmp(path + len - suffix_len, suffix) == 0) {
-    path[len - suffix_len] = '\0';  // remove "/build/"
-    strcat(path, "/res/");          // append "/res/"
+    path[len - suffix_len] = '\0'; // remove "/build/"
+    strcat(path, "/res/");         // append "/res/"
   }
 }
 
 void initSDL();
 void setupUI();
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   initSDL();
   setupUI();
 
   setupRects(rects);
 
-  decidingFunction = &ruleTnt;  // set the rule for life
-  runsForever = 1;               // if == 0, stops when it reaches the last row
+  decidingFunction = &rule30; // set the rule for life
+  runsForever = 1;            // if == 0, stops when it reaches the last row
 
   srand(time(0));
 
@@ -210,7 +272,7 @@ int main(int argc, char** argv) {
   while (!quit) {
     handleInput();
     handleLogic();
-    handleDrawing(100);
+    handleDrawing(10);
 
     if (currentState == running) {
       iteration++;
@@ -253,47 +315,42 @@ void initSDL() {
   }
 }
 
-void setupUI() {
+void createTexture(SDL_Texture **texture, const char *text, SDL_FRect *bounds, int x, int y, int selected) {
   SDL_Color white_color = {255, 255, 255, SDL_ALPHA_OPAQUE};
-  /* SDL_Color red_color = {255, 25, 25, SDL_ALPHA_OPAQUE}; */
+  SDL_Color green_color = {255, 0, 0, SDL_ALPHA_OPAQUE};
 
-  // tutorial/manual
-  char* tutorialString =
-      "Add points with LEFT MOUSE BUTTON --- Press SPACE to start, R to reset, Q to quit --- Change color: 1 - white "
-      "(life), 2 - black (void)";
+  SDL_Color color = selected ? green_color : white_color;
 
-  SDL_Surface* textSurface = TTF_RenderText_Blended(font, tutorialString, strlen(tutorialString), white_color);
+  float w, h;
 
-  if (!textSurface) {
-    SDL_Log("Surface error: %s", SDL_GetError());
-    exit(1);
-  }
+  SDL_Surface *textSurface = TTF_RenderText_Blended(font, text, strlen(text), color);
 
-  tutorialTextTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+  *texture = SDL_CreateTextureFromSurface(renderer, textSurface);
 
-  float textureW, textureH;
-  SDL_GetTextureSize(tutorialTextTexture, &textureW, &textureH);
+  SDL_GetTextureSize(*texture, &w, &h);
 
-  tutorialTextBounds.h = textureH;
-  tutorialTextBounds.w = textureW;
-  tutorialTextBounds.x = width / 2.0f - textureW / 2.0f;
-  tutorialTextBounds.y = height - textureH;
-
-  // TODO: refactor this, SDL_Texture* getTextTexture(string, color, bounds (destRect))
-  //  reset/quit
-  char* resetString = "Press R to reset, Q to quit";
-
-  textSurface = TTF_RenderText_Blended(font, resetString, strlen(resetString), white_color);
-
-  resetTextTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-
-  SDL_GetTextureSize(resetTextTexture, &textureW, &textureH);
-
-  resetTextBounds.h = textureH;
-  resetTextBounds.w = textureW;
-  resetTextBounds.x = 16;
-  resetTextBounds.y = textureH;
+  bounds->h = h;
+  bounds->w = w;
+  bounds->x = x / 2.0f - w / 2.0f;
+  bounds->y = y + h;
 
   SDL_DestroySurface(textSurface);
+}
+
+void setupUI() {
+  char *tutorialString =
+      "Add points with LEFT MOUSE BUTTON --- Press S to select rule, SPACE to start, R to reset, X to randomize, Q to "
+      "quit --- Change color: 1 - white "
+      "(life), 2 - black (void)";
+
+  createTexture(&tutorialTextTexture, tutorialString, &tutorialTextBounds, width, height - 48, 0);
+
+  char *resetString = "Press R to reset, Q to quit";
+
+  createTexture(&resetTextTexture, resetString, &resetTextBounds, 16, 0, 0);
+
+  for (int i = 0; i < n_rules; i++) {
+    createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
+  }
 }
 

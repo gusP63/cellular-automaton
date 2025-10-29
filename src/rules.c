@@ -238,6 +238,4 @@ void conwayGameOfLife(int i, int currentRow, int blocks[rows][cols], int blocksN
       blocksNext[currentRow][i] = 1;
   }
 
-
-
 }
