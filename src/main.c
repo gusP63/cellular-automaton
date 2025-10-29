@@ -39,6 +39,7 @@ LifeRule rules[10] = {{"alternatingRule", &alternatingRule, NULL, {}, false},
                       {"conwayGameOfLife", &conwayGameOfLife, NULL, {}, true}};
 
 int currentRule = 0;
+int currentRuleChanged = 0;
 
 SDL_Texture *resetTextTexture;
 SDL_FRect resetTextBounds;
@@ -96,6 +97,7 @@ void handleInput() {
 
         if (e.key.key == SDLK_S || e.key.key == SDLK_ESCAPE) {
           currentState = chooseRule;
+          currentRuleChanged = 1;
         }
 
         if (e.key.key == SDLK_X) {
@@ -151,12 +153,14 @@ void handleInput() {
             currentRule = n_rules - 1;
           else
             currentRule--;
+          currentRuleChanged = 1;
         }
         if (e.key.key == SDLK_DOWN || e.key.key == SDLK_J) {
           if (currentRule == (n_rules - 1))
             currentRule = 0;
           else
             currentRule++;
+          currentRuleChanged = 1;
         }
         break;
       }
@@ -228,14 +232,20 @@ void handleLogic() {
 void handleDrawing(int delay) { // milliseconds
   if (!rules[currentRule].runsForever && iteration >= rows - 1) return;
 
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE); // black
-  SDL_RenderClear(renderer);
-  SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // white
+  if (currentState == running || currentState == setup) {
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE); // black
+    SDL_RenderClear(renderer);
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // white
 
-  for (int i = 0; i < rows; i++) {
-    for (int j = 0; j < cols; j++) {
-      if (blocks[i][j] == 1) SDL_RenderFillRect(renderer, &rects[i][j]);
+    for (int i = 0; i < rows; i++) {
+      for (int j = 0; j < cols; j++) {
+        if (blocks[i][j] == 1) SDL_RenderFillRect(renderer, &rects[i][j]);
+      }
     }
+  }
+
+  if (currentState == running) {
+    SDL_Delay(delay);
   }
 
   if (currentState == setup) {
@@ -243,18 +253,27 @@ void handleDrawing(int delay) { // milliseconds
   }
 
   if (currentState == chooseRule) {
-    for (int i = 0; i < n_rules; i++) {
-      if (i == currentRule) {
-        createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 1);
-      } else
-        createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
+    if (currentRuleChanged) { // avoid unnecessary rerenders
+      SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+      SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE); // black
+      SDL_RenderClear(renderer);
+      SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE); // white
 
-      SDL_RenderTexture(renderer, rules[i].texture, NULL, &rules[i].bounds);
+      for (int i = 0; i < n_rules; i++) {
+        if (i == currentRule) {
+          createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 1);
+        } else {
+          createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
+        }
+
+        SDL_RenderTexture(renderer, rules[i].texture, NULL, &rules[i].bounds);
+      }
+
+      currentRuleChanged = 0;
     }
   }
 
   SDL_RenderPresent(renderer);
-  SDL_Delay(delay);
 }
 
 void getAssetsFolder(char *path) {
@@ -271,6 +290,8 @@ void getAssetsFolder(char *path) {
 void initSDL();
 void setupUI();
 
+void cleanup();
+
 int main(int argc, char **argv) {
   initSDL();
   setupUI();
@@ -279,18 +300,30 @@ int main(int argc, char **argv) {
 
   srand(time(0));
 
+  int delay = 10;
+
   // main loop
   while (!quit) {
     handleInput();
     handleLogic();
-    handleDrawing(10);
+    handleDrawing(delay);
   }
+
+  cleanup();
+
+  return 0;
+}
+
+void cleanup() {
+  SDL_DestroyTexture(tutorialTextTexture);
+  SDL_DestroyTexture(resetTextTexture);
+
+  for (int i = 0; i < n_rules; i++)
+    SDL_DestroyTexture(rules[i].texture);
 
   SDL_DestroyWindow(window);
   SDL_DestroyRenderer(renderer);
   SDL_Quit();
-
-  return 0;
 }
 
 void initSDL() {
@@ -356,8 +389,8 @@ void setupUI() {
 
   createTexture(&resetTextTexture, resetString, &resetTextBounds, 16, 0, 0);
 
-  /* for (int i = 0; i < n_rules; i++) { */
-  /*   createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0); */
-  /* } */
+  for (int i = 0; i < n_rules; i++) {
+    createTexture(&rules[i].texture, rules[i].name, &rules[i].bounds, width, height / 4.0f + (i * 48), 0);
+  }
 }
 

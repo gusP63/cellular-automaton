@@ -1,6 +1,5 @@
 #include "rules.h"
 #include "constants.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 void alternatingRule(int i, int currentRow, int blocks[rows][cols], int blocksNext[rows][cols]) {
@@ -137,27 +136,57 @@ void ruleRain(int i, int currentRow, int blocks[rows][cols], int blocksNext[rows
   int x8 = i == 0 ? 0 : blocks[currentRow][i - 1];
 
   if (currentRow == 0) {
-    if (rand() % (100) <= 5) {
+    if (rand() % (500) <= 1) {
       blocksNext[currentRow][i] = 1;
       return;
     }
   }
 
-  if (x2) {
-    blocksNext[currentRow - 1][i] = 0;
+  if (i == 0) {
+    if (rand() % (500) <= 1) {
+      blocksNext[currentRow][i] = 1;
+      return;
+    }
+  }
+
+  if (i == cols - 1 || currentRow == rows - 1) {
+    blocksNext[currentRow][i] = 0;
+    /* return; */
+  }
+
+  if ((x1) && rand() % 100 <= 99) {
+    /* if (currentRow - 2 >= 0) { */
+    /* blocksNext[currentRow - 2][i] = 0; */
+    blocksNext[currentRow - 1][i - 1] = 0;
+    /* } */
     blocksNext[currentRow][i] = 1;
+    if (currentRow + 1 < rows && i + 1 < cols) blocksNext[currentRow + 1][i + 1] = 1;
 
-    if (rand() % (100) <= 1) {
-      if (i >= 1) blocksNext[currentRow][i - 1] = 1;
-    }
+    /* if (i + 1 < cols) blocksNext[currentRow][i + 1] = 1; */ // weird cool effect
 
-    if (rand() % (100) <= 1) {
-      if (i < cols - 1) blocksNext[currentRow][i + 1] = 1;
-    }
+    /* if (rand() % (100) < 1) { */
+    /*   if (rand() % 100 <= 50) { */
+    /*     if (i >= 1) blocksNext[currentRow][i - 1] = 1; */
+    /*   } else if (i < cols - 1) */
+    /*     blocksNext[currentRow][i + 1] = 1; */
+    /* } */
+
+    /* if (rand() % 100 <= 80) { */
+    /* if (currentRow < rows - 1) blocksNext[currentRow + 1][i] = 1; */
+    /* } */
+
+    /* if (rand() % 100 <= 10) { */
+    /* if (currentRow < rows - 2) blocksNext[currentRow + 2][i] = 1; */
+    /* } */
   }
 
   if (x5 || x6 || x7) {
     blocksNext[currentRow][i] = 0;
+  }
+
+  if (rand() % (100) < 1) {
+    blocksNext[currentRow][i] = 0;
+    return;
   }
 }
 
